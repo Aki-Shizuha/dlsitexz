@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DLsite 游戏浏览器</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f0f14; --bg2: #16161e; --bg3: #1e1e2a; --bg4: #262636;
+  --text: #e0e0f0; --text2: #a0a0c0; --text3: #6a6a8a;
+  --accent: #7c5bf5; --accent2: #9b7bff; --accent-glow: rgba(124,91,245,0.3);
+  --red: #ef4444; --green: #10b981; --yellow: #f59e0b; --blue: #3b82f6;
+  --border: #2a2a3e; --card-bg: #1a1a28; --card-hover: #22223a;
+  --radius: 12px; --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --transition: 0.2s ease;
+}
+html { font-size: 14px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; overflow-x: hidden;
+}
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button {
+  cursor: pointer; border: none; font-family: inherit;
+  transition: all var(--transition);
+}
+input, select {
+  font-family: inherit; color: var(--text);
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 12px;
+  transition: border-color var(--transition);
+  outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+/* ── Layout ── */
+.app { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 260px; background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+  transition: transform 0.3s ease;
+}
+.sidebar.collapsed { transform: translateX(-260px); }
+.main { flex: 1; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; transition: margin-left 0.3s ease; }
+.main.expanded { margin-left: 0; }
+
+/* ── Sidebar ── */
+.sidebar-header {
+  padding: 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.sidebar-header h1 {
+  font-size: 1.2rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 12px; }
+.nav-section { margin-bottom: 16px; }
+.nav-section-title {
+  font-size: 0.75rem; text-transform: uppercase; color: var(--text3);
+  padding: 4px 12px; letter-spacing: 1px; font-weight: 600;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  color: var(--text2); font-size: 0.9rem; cursor: pointer;
+  transition: all var(--transition);
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--accent); color: #fff; }
+.nav-item .count {
+  margin-left: auto; font-size: 0.75rem;
+  background: var(--bg4); padding: 2px 8px; border-radius: 10px;
+}
+.nav-item.active .count { background: rgba(255,255,255,0.2); }
+.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Top Bar ── */
+.topbar {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 12px 24px; display: flex; align-items: center; gap: 12px;
+  position: sticky; top: 0; z-index: 50;
+}
+.toggle-sidebar {
+  background: none; color: var(--text2); font-size: 1.3rem;
+  padding: 4px; display: flex;
+}
+.toggle-sidebar:hover { color: var(--text); }
+.search-box {
+  flex: 1; max-width: 480px; position: relative;
+}
+.search-box input {
+  width: 100%; padding-left: 36px;
+}
+.search-box .search-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--text3); font-size: 0.9rem;
+}
+.topbar-actions { display: flex; gap: 8px; margin-left: auto; }
+.btn {
+  padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.85rem;
+  font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--bg4); color: var(--text); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:hover { opacity: 0.9; }
+.btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+.btn-icon { padding: 6px 8px; background: none; color: var(--text2); font-size: 1rem; }
+.btn-icon:hover { color: var(--text); }
+
+/* ── Filter Bar ── */
+.filter-bar {
+  padding: 10px 24px; background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.filter-bar select { font-size: 0.85rem; padding: 6px 10px; }
+.filter-bar .result-count { color: var(--text3); font-size: 0.85rem; margin-left: auto; }
+
+/* ── Content ── */
+.content { flex: 1; padding: 24px; }
+
+/* ── Grid View ── */
+.works-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.work-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  cursor: pointer; transition: all var(--transition);
+  position: relative;
+}
+.work-card:hover {
+  transform: translateY(-2px); border-color: var(--accent);
+  box-shadow: 0 8px 32px rgba(124,91,245,0.15);
+}
+.work-card .thumb {
+  width: 100%; aspect-ratio: 4/3; object-fit: cover;
+  background: var(--bg3); display: block;
+}
+.work-card .info { padding: 12px; }
+.work-card .title {
+  font-size: 0.9rem; font-weight: 600; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; margin-bottom: 6px;
+}
+.work-card .meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 0.75rem; color: var(--text3);
+}
+.work-card .circle { color: var(--text2); }
+.work-card .rating-stars { color: var(--yellow); }
+.work-card .price { color: var(--accent2); font-weight: 600; }
+.work-card .badges {
+  position: absolute; top: 8px; right: 8px;
+  display: flex; gap: 4px;
+}
+.badge {
+  font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
+  font-weight: 600; backdrop-filter: blur(8px);
+}
+.badge-age { background: rgba(239,68,68,0.85); color: #fff; }
+.badge-type { background: rgba(124,91,245,0.85); color: #fff; }
+.badge-cat {
+  position: absolute; top: 8px; left: 8px;
+  font-size: 0.7rem; padding: 3px 8px; border-radius: 4px;
+  color: #fff; font-weight: 600;
+}
+.work-card .card-actions {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 8px; background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  display: flex; gap: 4px; justify-content: flex-end;
+  opacity: 0; transition: opacity var(--transition);
+}
+.work-card:hover .card-actions { opacity: 1; }
+.card-action-btn {
+  background: rgba(255,255,255,0.15); color: #fff; border: none;
+  padding: 4px 8px; border-radius: 4px; font-size: 0.75rem;
+  cursor: pointer; backdrop-filter: blur(4px);
+}
+.card-action-btn:hover { background: rgba(255,255,255,0.3); }
+.card-action-btn.block { background: rgba(239,68,68,0.6); }
+
+/* ── Modal / Detail ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  z-index: 200; display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.modal-overlay.active { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); max-width: 900px; width: 95%;
+  max-height: 90vh; overflow-y: auto; padding: 0;
+  transform: scale(0.95); transition: transform 0.3s;
+}
+.modal-overlay.active .modal { transform: scale(1); }
+.modal-header {
+  position: sticky; top: 0; background: var(--bg2);
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  z-index: 1;
+}
+.modal-header h2 { font-size: 1.1rem; font-weight: 600; }
+.modal-close {
+  background: none; color: var(--text2); font-size: 1.4rem;
+  padding: 4px; line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 24px; }
+.detail-top { display: flex; gap: 24px; margin-bottom: 24px; }
+.detail-cover {
+  width: 280px; flex-shrink: 0; border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.detail-cover img { width: 100%; display: block; }
+.detail-info { flex: 1; }
+.detail-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; }
+.detail-circle { color: var(--text2); margin-bottom: 12px; }
+.detail-meta-grid {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 16px;
+  font-size: 0.85rem; margin-bottom: 16px;
+}
+.detail-meta-grid dt { color: var(--text3); }
+.detail-meta-grid dd { color: var(--text); }
+.detail-genres { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.genre-tag {
+  font-size: 0.75rem; padding: 4px 10px; border-radius: 20px;
+  background: var(--bg4); color: var(--text2); border: 1px solid var(--border);
+}
+.detail-desc {
+  font-size: 0.9rem; line-height: 1.7; color: var(--text2);
+  border-top: 1px solid var(--border); padding-top: 16px;
+}
+.detail-desc img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+.detail-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.detail-samples {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px; margin-top: 16px;
+}
+.detail-samples img {
+  width: 100%; border-radius: 6px; cursor: pointer;
+  transition: transform var(--transition);
+}
+.detail-samples img:hover { transform: scale(1.05); }
+
+/* ── Scrape Panel ── */
+.panel {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+}
+.panel h3 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; }
+.form-row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 0.8rem; color: var(--text3); }
+.form-group input, .form-group select { min-width: 120px; }
+.status-bar {
+  background: var(--bg3); border-radius: var(--radius-sm);
+  padding: 12px 16px; font-size: 0.85rem; color: var(--text2);
+  display: flex; flex-wrap: wrap; gap: 16px;
+}
+.status-bar .stat { display: flex; align-items: center; gap: 6px; }
+.status-bar .stat .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.dot-running { background: var(--green); animation: pulse 1.5s infinite; }
+.dot-idle { background: var(--text3); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex; justify-content: center; align-items: center;
+  gap: 8px; padding: 24px 0;
+}
+.page-btn {
+  padding: 6px 12px; border-radius: var(--radius-sm);
+  background: var(--bg3); color: var(--text2); border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.page-btn:hover { background: var(--bg4); color: var(--text); }
+.page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Category Manager ── */
+.cat-manager { padding: 12px; border-top: 1px solid var(--border); }
+.cat-add { display: flex; gap: 6px; }
+.cat-add input { flex: 1; font-size: 0.85rem; padding: 6px 8px; }
+.cat-add input[type="color"] { width: 32px; padding: 2px; cursor: pointer; }
+
+/* ── Empty State ── */
+.empty-state {
+  text-align: center; padding: 80px 24px; color: var(--text3);
+}
+.empty-state .icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+.empty-state h3 { font-size: 1.1rem; color: var(--text2); margin-bottom: 8px; }
+
+/* ── Image Viewer ── */
+.image-viewer {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+  z-index: 300; display: flex; align-items: center; justify-content: center;
+  cursor: zoom-out; opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.image-viewer.active { opacity: 1; pointer-events: all; }
+.image-viewer img { max-width: 95%; max-height: 95%; object-fit: contain; }
+
+/* ── Loading ── */
+.loading { display: flex; justify-content: center; padding: 40px; }
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ── */
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: 400; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  padding: 12px 20px; border-radius: var(--radius-sm);
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-size: 0.85rem; box-shadow: var(--shadow);
+  animation: slideIn 0.3s ease;
+}
+.toast.success { border-color: var(--green); }
+.toast.error { border-color: var(--red); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-260px); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; }
+  .works-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .detail-top { flex-direction: column; }
+  .detail-cover { width: 100%; }
+  .topbar { padding: 10px 12px; }
+  .content { padding: 12px; }
+}
+
+/* ── Select Category Dropdown ── */
+.cat-dropdown {
+  position: absolute; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 4px; z-index: 10;
+  box-shadow: var(--shadow); min-width: 120px;
+}
+.cat-dropdown-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 0.85rem; color: var(--text2);
+}
+.cat-dropdown-item:hover { background: var(--bg3); color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+      </svg>
+      <h1>DLsite 浏览器</h1>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">浏览</div>
+        <div class="nav-item active" data-view="all" onclick="navigate('all')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          全部作品 <span class="count" id="count-all">0</span>
+        </div>
+        <div class="nav-item" data-view="blocked" onclick="navigate('blocked')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+          已屏蔽 <span class="count" id="count-blocked">0</span>
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">分类收藏</div>
+        <div id="category-nav"></div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">工具</div>
+        <div class="nav-item" data-view="scraper" onclick="navigate('scraper')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
+          爬取管理
+        </div>
+        <div class="nav-item" data-view="fetch" onclick="navigate('fetch')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          单个获取
+        </div>
+      </div>
+    </nav>
+    <div class="cat-manager">
+      <div class="cat-add">
+        <input type="text" id="new-cat-name" placeholder="新分类名称" maxlength="20">
+        <input type="color" id="new-cat-color" value="#6366f1">
+        <button class="btn btn-primary btn-sm" onclick="createCategory()">+</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main" id="main-content">
+    <div class="topbar">
+      <button class="toggle-sidebar" onclick="toggleSidebar()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+      <div class="search-box">
+        <span class="search-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </span>
+        <input type="text" id="search-input" placeholder="搜索标题、社团、ID..." oninput="debounceSearch()">
+      </div>
+      <div class="topbar-actions">
+        <select id="sort-select" onchange="applyFilters()" style="font-size:0.85rem">
+          <option value="fetched_at">最新获取</option>
+          <option value="rating">评分最高</option>
+          <option value="release_date">发售日期</option>
+          <option value="dl_count">销量最高</option>
+          <option value="title">标题排序</option>
+        </select>
+        <select id="dir-select" onchange="applyFilters()" style="font-size:0.85rem">
+          <option value="DESC">降序</option>
+          <option value="ASC">升序</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="filter-bar" id="filter-bar">
+      <select id="filter-type" onchange="applyFilters()">
+        <option value="">全部类型</option>
+        <option value="角色扮演">角色扮演</option>
+        <option value="动作">动作</option>
+        <option value="冒险">冒险</option>
+        <option value="模拟">模拟</option>
+        <option value="电子小说">电子小说</option>
+        <option value="射击">射击</option>
+        <option value="益智">益智</option>
+        <option value="CG・插画">CG・插画</option>
+        <option value="漫画">漫画</option>
+        <option value="音声/ASMR">音声/ASMR</option>
+        <option value="视频">视频</option>
+        <option value="音乐">音乐</option>
+        <option value="其他">其他</option>
+      </select>
+      <select id="filter-age" onchange="applyFilters()">
+        <option value="">全部年龄</option>
+        <option value="全年龄">全年龄</option>
+        <option value="R-15">R-15</option>
+        <option value="R-18">R-18</option>
+      </select>
+      <select id="filter-rating" onchange="applyFilters()">
+        <option value="">全部评分</option>
+        <option value="4.5">4.5+</option>
+        <option value="4">4.0+</option>
+        <option value="3.5">3.5+</option>
+        <option value="3">3.0+</option>
+      </select>
+      <span class="result-count" id="result-count"></span>
+    </div>
+
+    <div class="content" id="content-area">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">作品详情</h2>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Image Viewer -->
+<div class="image-viewer" id="image-viewer" onclick="closeImageViewer()">
+  <img id="viewer-image" src="">
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ── State ──
+let currentView = 'all';
+let currentPage = 1;
+let currentCategory = '';
+let categories = [];
+let searchTimer = null;
+let sidebarOpen = true;
+let scrapeInterval = null;
+
+// ── API ──
+async function api(path, options = {}) {
+  const resp = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  return resp.json();
+}
+
+// ── Toast ──
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ── Navigation ──
+function navigate(view, cat = '') {
+  currentView = view;
+  currentCategory = cat;
+  currentPage = 1;
+
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const target = document.querySelector(`.nav-item[data-view="${view}"]${cat ? `[data-cat="${cat}"]` : ''}`);
+  if (target) target.classList.add('active');
+
+  const filterBar = document.getElementById('filter-bar');
+  const pagination = document.getElementById('pagination');
+
+  if (view === 'scraper') {
+    filterBar.style.display = 'none';
+    pagination.style.display = 'none';
+    renderScraperPanel();
+  } else if (view === 'fetch') {
+    filterBar.style.display = 'none';
+    pagination.style.display = 'none';
+    renderFetchPanel();
+  } else {
+    filterBar.style.display = 'flex';
+    pagination.style.display = 'flex';
+    loadWorks();
+  }
+}
+
+// ── Works Loading ──
+async function loadWorks() {
+  const content = document.getElementById('content-area');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const params = new URLSearchParams();
+  params.set('page', currentPage);
+  params.set('per_page', '30');
+
+  if (currentView === 'blocked') {
+    params.set('status', 'blocked');
+  } else if (currentView === 'category') {
+    params.set('category', currentCategory);
+  } else {
+    params.set('status', 'all');
+  }
+
+  const search = document.getElementById('search-input').value.trim();
+  if (search) params.set('search', search);
+
+  const sort = document.getElementById('sort-select').value;
+  params.set('sort', sort);
+  params.set('dir', document.getElementById('dir-select').value);
+
+  const workType = document.getElementById('filter-type').value;
+  if (workType) params.set('work_type', workType);
+
+  const age = document.getElementById('filter-age').value;
+  if (age) params.set('age_rating', age);
+
+  const minRating = document.getElementById('filter-rating').value;
+  if (minRating) params.set('min_rating', minRating);
+
+  try {
+    const data = await api(`/api/works?${params}`);
+    renderWorks(data);
+    renderPagination(data);
+    document.getElementById('result-count').textContent = `共 ${data.total} 个结果`;
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><div class="icon">⚠</div><h3>加载失败</h3><p>请检查服务器连接</p></div>';
+  }
+}
+
+function proxyImg(url) {
+  if (!url) return '';
+  return `/api/proxy/image?url=${encodeURIComponent(url)}`;
+}
+
+function renderStars(rating) {
+  if (!rating) return '';
+  const full = Math.floor(rating);
+  const half = rating - full >= 0.5;
+  let s = '';
+  for (let i = 0; i < full; i++) s += '★';
+  if (half) s += '☆';
+  return s;
+}
+
+function renderWorks(data) {
+  const content = document.getElementById('content-area');
+  if (!data.works || data.works.length === 0) {
+    content.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">📭</div>
+        <h3>暂无作品</h3>
+        <p>试试使用爬取功能或单个获取来添加作品</p>
+      </div>`;
+    return;
+  }
+
+  const cards = data.works.map(w => {
+    const catBadge = w.category ? `<div class="badge-cat" style="background:${getCatColor(w.category)}">${w.category}</div>` : '';
+    return `
+    <div class="work-card" onclick="showDetail('${w.id}')">
+      ${catBadge}
+      <div class="badges">
+        ${w.age_rating ? `<span class="badge badge-age">${w.age_rating}</span>` : ''}
+        ${w.work_type ? `<span class="badge badge-type">${w.work_type}</span>` : ''}
+      </div>
+      <img class="thumb" src="${proxyImg(w.image_url)}" alt="${esc(w.title)}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22><rect fill=%22%231e1e2a%22 width=%22400%22 height=%22300%22/><text x=%22200%22 y=%22150%22 fill=%22%234a4a6a%22 text-anchor=%22middle%22 font-size=%2220%22>No Image</text></svg>'">
+      <div class="info">
+        <div class="title">${esc(w.title)}</div>
+        <div class="meta">
+          <span class="circle">${esc(w.circle)}</span>
+          ${w.rating ? `<span class="rating-stars">${renderStars(w.rating)} ${w.rating}</span>` : ''}
+        </div>
+        <div class="meta" style="margin-top:4px">
+          ${w.price ? `<span class="price">${w.price}</span>` : ''}
+          ${w.dl_count ? `<span>DL: ${w.dl_count}</span>` : ''}
+        </div>
+      </div>
+      <div class="card-actions" onclick="event.stopPropagation()">
+        <button class="card-action-btn" onclick="quickCategory('${w.id}')" title="收藏">♥</button>
+        <button class="card-action-btn block" onclick="blockWork('${w.id}')" title="屏蔽">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = `<div class="works-grid">${cards}</div>`;
+}
+
+function renderPagination(data) {
+  const el = document.getElementById('pagination');
+  if (data.pages <= 1) { el.innerHTML = ''; return; }
+
+  let html = '';
+  html += `<button class="page-btn" ${data.page <= 1 ? 'disabled' : ''} onclick="goPage(${data.page - 1})">‹ 上一页</button>`;
+
+  const range = 3;
+  let start = Math.max(1, data.page - range);
+  let end = Math.min(data.pages, data.page + range);
+
+  if (start > 1) {
+    html += `<button class="page-btn" onclick="goPage(1)">1</button>`;
+    if (start > 2) html += `<span style="color:var(--text3)">...</span>`;
+  }
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i === data.page ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (end < data.pages) {
+    if (end < data.pages - 1) html += `<span style="color:var(--text3)">...</span>`;
+    html += `<button class="page-btn" onclick="goPage(${data.pages})">${data.pages}</button>`;
+  }
+
+  html += `<button class="page-btn" ${data.page >= data.pages ? 'disabled' : ''} onclick="goPage(${data.page + 1})">下一页 ›</button>`;
+  el.innerHTML = html;
+}
+
+function goPage(p) {
+  currentPage = p;
+  loadWorks();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function applyFilters() {
+  currentPage = 1;
+  loadWorks();
+}
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => applyFilters(), 400);
+}
+
+// ── Detail Modal ──
+async function showDetail(id) {
+  const modal = document.getElementById('detail-modal');
+  const body = document.getElementById('modal-body');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  modal.classList.add('active');
+
+  try {
+    const w = await api(`/api/works/${id}`);
+    document.getElementById('modal-title').textContent = w.title || id;
+
+    const genres = (w.genres || []).map(g => `<span class="genre-tag">${esc(g)}</span>`).join('');
+    const samples = (w.sample_images || []).map(s => `<img src="${proxyImg(s)}" loading="lazy" onclick="event.stopPropagation();viewImage('${proxyImg(s)}')">`).join('');
+
+    body.innerHTML = `
+      <div class="detail-top">
+        <div class="detail-cover">
+          <img src="${proxyImg(w.image_url)}" alt="${esc(w.title)}" onclick="viewImage('${proxyImg(w.image_url)}')">
+        </div>
+        <div class="detail-info">
+          <div class="detail-title">${esc(w.title)}</div>
+          <div class="detail-circle">${esc(w.circle)} ${w.circle_id ? `(${w.circle_id})` : ''}</div>
+          <dl class="detail-meta-grid">
+            <dt>作品ID</dt><dd><a href="${w.page_url}" target="_blank" rel="noopener">${w.id}</a></dd>
+            ${w.price ? `<dt>价格</dt><dd>${w.price}</dd>` : ''}
+            ${w.rating ? `<dt>评分</dt><dd><span style="color:var(--yellow)">${renderStars(w.rating)}</span> ${w.rating} (${w.rating_count}票)</dd>` : ''}
+            ${w.dl_count ? `<dt>销量</dt><dd>${w.dl_count}</dd>` : ''}
+            ${w.work_type ? `<dt>类型</dt><dd>${w.work_type}</dd>` : ''}
+            ${w.age_rating ? `<dt>年龄</dt><dd>${w.age_rating}</dd>` : ''}
+            ${w.release_date ? `<dt>发售</dt><dd>${w.release_date}</dd>` : ''}
+            ${w.update_date ? `<dt>更新</dt><dd>${w.update_date}</dd>` : ''}
+            ${w.series ? `<dt>系列</dt><dd>${w.series}</dd>` : ''}
+            ${w.file_size ? `<dt>大小</dt><dd>${w.file_size}</dd>` : ''}
+            ${(w.file_formats||[]).length ? `<dt>格式</dt><dd>${w.file_formats.join(', ')}</dd>` : ''}
+            <dt>状态</dt><dd>${w.status === 'blocked' ? '已屏蔽' : (w.category || '未分类')}</dd>
+          </dl>
+          ${genres ? `<div class="detail-genres">${genres}</div>` : ''}
+          <div class="detail-actions">
+            ${categories.map(c => `<button class="btn btn-sm" style="background:${c.color};color:#fff" onclick="setCategoryDirect('${w.id}','${esc(c.name)}')">${esc(c.name)}</button>`).join('')}
+            <button class="btn btn-sm btn-secondary" onclick="setCategoryDirect('${w.id}','')">取消分类</button>
+            ${w.status === 'blocked'
+              ? `<button class="btn btn-sm btn-secondary" onclick="unblockWork('${w.id}')">取消屏蔽</button>`
+              : `<button class="btn btn-sm btn-danger" onclick="blockWork('${w.id}')">屏蔽</button>`}
+            <a class="btn btn-sm btn-secondary" href="${w.page_url}" target="_blank" rel="noopener">打开DLsite</a>
+          </div>
+        </div>
+      </div>
+      ${w.description ? `<div class="detail-desc">${w.description}</div>` : ''}
+      ${samples ? `<h3 style="margin-top:24px;margin-bottom:12px">预览图</h3><div class="detail-samples">${samples}</div>` : ''}
+    `;
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state"><h3>加载失败</h3></div>';
+  }
+}
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('active');
+}
+
+// ── Image Viewer ──
+function viewImage(src) {
+  document.getElementById('viewer-image').src = src;
+  document.getElementById('image-viewer').classList.add('active');
+}
+function closeImageViewer() {
+  document.getElementById('image-viewer').classList.remove('active');
+}
+
+// ── Actions ──
+async function blockWork(id) {
+  await api(`/api/works/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'blocked' }) });
+  toast('已屏蔽', 'success');
+  loadWorks();
+  loadStats();
+}
+
+async function unblockWork(id) {
+  await api(`/api/works/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'normal' }) });
+  toast('已取消屏蔽', 'success');
+  closeModal();
+  loadWorks();
+  loadStats();
+}
+
+async function setCategoryDirect(id, cat) {
+  await api(`/api/works/${id}`, { method: 'PUT', body: JSON.stringify({ category: cat }) });
+  toast(cat ? `已归类到「${cat}」` : '已取消分类', 'success');
+  loadWorks();
+  loadCategories();
+}
+
+function quickCategory(id) {
+  // Quick favorite
+  setCategoryDirect(id, '收藏');
+}
+
+// ── Categories ──
+async function loadCategories() {
+  categories = await api('/api/categories');
+  renderCategoryNav();
+}
+
+function getCatColor(name) {
+  const cat = categories.find(c => c.name === name);
+  return cat ? cat.color : '#6366f1';
+}
+
+function renderCategoryNav() {
+  const nav = document.getElementById('category-nav');
+  nav.innerHTML = categories.map(c => `
+    <div class="nav-item" data-view="category" data-cat="${esc(c.name)}" onclick="navigate('category','${esc(c.name)}')">
+      <span class="cat-dot" style="background:${c.color}"></span>
+      ${esc(c.name)}
+      <span class="count">${c.count}</span>
+    </div>
+  `).join('');
+}
+
+async function createCategory() {
+  const name = document.getElementById('new-cat-name').value.trim();
+  const color = document.getElementById('new-cat-color').value;
+  if (!name) return;
+  await api('/api/categories', { method: 'POST', body: JSON.stringify({ name, color }) });
+  document.getElementById('new-cat-name').value = '';
+  toast(`分类「${name}」已创建`, 'success');
+  loadCategories();
+}
+
+// ── Stats ──
+async function loadStats() {
+  try {
+    const stats = await api('/api/stats');
+    document.getElementById('count-all').textContent = stats.visible || 0;
+    document.getElementById('count-blocked').textContent = stats.blocked || 0;
+  } catch (e) {}
+}
+
+// ── Scraper Panel ──
+function renderScraperPanel() {
+  const content = document.getElementById('content-area');
+  content.innerHTML = `
+    <div class="panel">
+      <h3>批量爬取 DLsite 作品</h3>
+      <p style="color:var(--text3);font-size:0.85rem;margin-bottom:16px">
+        设置ID范围进行批量爬取。为避免被DLsite封禁，默认间隔10秒/次。
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>前缀</label>
+          <select id="scrape-prefix">
+            <option value="RJ">RJ (同人)</option>
+            <option value="VJ">VJ (商业)</option>
+            <option value="BJ">BJ (书籍)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>起始ID (数字部分)</label>
+          <input type="number" id="scrape-start" placeholder="例: 100000" value="1000000">
+        </div>
+        <div class="form-group">
+          <label>结束ID (数字部分)</label>
+          <input type="number" id="scrape-end" placeholder="例: 100100" value="1000100">
+        </div>
+        <div class="form-group">
+          <label>站点分类</label>
+          <select id="scrape-category">
+            <option value="maniax">Maniax (成人同人)</option>
+            <option value="home">Home (全年龄同人)</option>
+            <option value="pro">Pro (成人商业)</option>
+            <option value="soft">Soft (全年龄商业)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>请求间隔(毫秒)</label>
+          <input type="number" id="scrape-delay" value="12000" min="10000" step="1000">
+        </div>
+      </div>
+      <div class="form-row">
+        <button class="btn btn-primary" id="scrape-start-btn" onclick="startScrape()">开始爬取</button>
+        <button class="btn btn-danger" id="scrape-stop-btn" onclick="stopScrape()" style="display:none">停止爬取</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>爬取状态</h3>
+      <div class="status-bar" id="scrape-status">
+        <div class="stat"><span class="dot dot-idle"></span> 空闲</div>
+      </div>
+    </div>
+  `;
+  updateScrapeStatus();
+  if (!scrapeInterval) {
+    scrapeInterval = setInterval(updateScrapeStatus, 2000);
+  }
+}
+
+async function startScrape() {
+  const task = {
+    start_id: parseInt(document.getElementById('scrape-start').value),
+    end_id: parseInt(document.getElementById('scrape-end').value),
+    prefix: document.getElementById('scrape-prefix').value,
+    site_category: document.getElementById('scrape-category').value,
+    delay_ms: parseInt(document.getElementById('scrape-delay').value),
+  };
+
+  if (!task.start_id || !task.end_id || task.start_id > task.end_id) {
+    toast('请输入有效的ID范围', 'error');
+    return;
+  }
+
+  try {
+    await api('/api/scrape/start', { method: 'POST', body: JSON.stringify(task) });
+    toast('爬取已启动', 'success');
+    updateScrapeStatus();
+  } catch (e) {
+    toast('启动失败', 'error');
+  }
+}
+
+async function stopScrape() {
+  await api('/api/scrape/stop', { method: 'POST' });
+  toast('正在停止...', 'info');
+}
+
+async function updateScrapeStatus() {
+  try {
+    const status = await api('/api/scrape/status');
+    const el = document.getElementById('scrape-status');
+    if (!el) return;
+
+    const dotClass = status.running ? 'dot-running' : 'dot-idle';
+    el.innerHTML = `
+      <div class="stat"><span class="dot ${dotClass}"></span> ${status.running ? '运行中' : '空闲'}</div>
+      ${status.current_id ? `<div class="stat">当前: ${status.current_id}</div>` : ''}
+      <div class="stat">已处理: ${status.total_done}</div>
+      <div class="stat">已找到: ${status.total_found}</div>
+      <div class="stat">失败: ${status.total_errors}</div>
+      ${status.speed ? `<div class="stat">速度: ${status.speed}</div>` : ''}
+      ${status.message ? `<div class="stat" style="flex-basis:100%;color:var(--text)">${esc(status.message)}</div>` : ''}
+    `;
+
+    const startBtn = document.getElementById('scrape-start-btn');
+    const stopBtn = document.getElementById('scrape-stop-btn');
+    if (startBtn && stopBtn) {
+      startBtn.style.display = status.running ? 'none' : '';
+      stopBtn.style.display = status.running ? '' : 'none';
+    }
+
+    if (status.running) {
+      loadStats();
+    }
+  } catch (e) {}
+}
+
+// ── Fetch Panel ──
+function renderFetchPanel() {
+  const content = document.getElementById('content-area');
+  content.innerHTML = `
+    <div class="panel">
+      <h3>单个获取作品</h3>
+      <p style="color:var(--text3);font-size:0.85rem;margin-bottom:16px">
+        输入作品ID（如 RJ123456）直接获取该作品的信息。
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>作品ID</label>
+          <input type="text" id="fetch-id" placeholder="RJ123456" style="min-width:200px">
+        </div>
+        <div class="form-group">
+          <label>站点分类</label>
+          <select id="fetch-category">
+            <option value="">自动检测</option>
+            <option value="maniax">Maniax</option>
+            <option value="home">Home</option>
+            <option value="pro">Pro</option>
+            <option value="soft">Soft</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="fetchSingle()" style="align-self:end">获取</button>
+      </div>
+      <div id="fetch-result" style="margin-top:16px"></div>
+    </div>
+    <div class="panel">
+      <h3>批量输入</h3>
+      <p style="color:var(--text3);font-size:0.85rem;margin-bottom:16px">
+        每行一个ID，支持批量获取（每个间隔10秒）。
+      </p>
+      <div class="form-group" style="margin-bottom:12px">
+        <textarea id="batch-ids" rows="5" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:12px;font-family:monospace;resize:vertical" placeholder="RJ123456&#10;RJ234567&#10;RJ345678"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="fetchBatch()">批量获取</button>
+      <div id="batch-result" style="margin-top:16px"></div>
+    </div>
+  `;
+}
+
+async function fetchSingle() {
+  const id = document.getElementById('fetch-id').value.trim().toUpperCase();
+  const cat = document.getElementById('fetch-category').value;
+  const result = document.getElementById('fetch-result');
+
+  if (!id) { toast('请输入作品ID', 'error'); return; }
+
+  result.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  try {
+    const w = await api('/api/fetch', { method: 'POST', body: JSON.stringify({ id, site_category: cat }) });
+    if (w.error) {
+      result.innerHTML = `<div style="color:var(--red)">${esc(w.error)}</div>`;
+      return;
+    }
+    result.innerHTML = `
+      <div style="display:flex;gap:16px;align-items:start;background:var(--bg3);padding:16px;border-radius:var(--radius-sm)">
+        <img src="${proxyImg(w.image_url)}" style="width:120px;border-radius:8px" onerror="this.style.display='none'">
+        <div>
+          <div style="font-weight:600;margin-bottom:4px">${esc(w.title)}</div>
+          <div style="color:var(--text2);font-size:0.85rem">${esc(w.circle)} | ${w.work_type} | ${w.price}</div>
+          <div style="color:var(--yellow);margin-top:4px">${renderStars(w.rating)} ${w.rating || ''}</div>
+          <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="showDetail('${w.id}')">查看详情</button>
+        </div>
+      </div>
+    `;
+    toast('获取成功', 'success');
+    loadStats();
+  } catch (e) {
+    result.innerHTML = `<div style="color:var(--red)">获取失败: ${e.message}</div>`;
+  }
+}
+
+async function fetchBatch() {
+  const text = document.getElementById('batch-ids').value.trim();
+  if (!text) { toast('请输入作品ID', 'error'); return; }
+
+  const ids = text.split('\n').map(s => s.trim().toUpperCase()).filter(s => /^(RJ|VJ|BJ|RE)\d{6,8}$/.test(s));
+  if (ids.length === 0) { toast('未找到有效的作品ID', 'error'); return; }
+
+  const result = document.getElementById('batch-result');
+  result.innerHTML = `<div style="color:var(--text2)">正在获取 ${ids.length} 个作品...</div>`;
+
+  let done = 0, success = 0;
+  for (const id of ids) {
+    try {
+      const w = await api('/api/fetch', { method: 'POST', body: JSON.stringify({ id }) });
+      if (!w.error) success++;
+    } catch (e) {}
+    done++;
+    result.innerHTML = `<div style="color:var(--text2)">进度: ${done}/${ids.length} (成功: ${success})</div>`;
+
+    if (done < ids.length) {
+      await new Promise(r => setTimeout(r, 10000));
+    }
+  }
+
+  result.innerHTML = `<div style="color:var(--green)">完成！成功获取 ${success}/${ids.length} 个作品</div>`;
+  toast('批量获取完成', 'success');
+  loadStats();
+  loadCategories();
+}
+
+// ── Sidebar Toggle ──
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
+  document.getElementById('main-content').classList.toggle('expanded', !sidebarOpen);
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
+  }
+}
+
+// ── Escape HTML ──
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeImageViewer();
+  }
+});
+
+// ── Init ──
+async function init() {
+  await Promise.all([loadStats(), loadCategories()]);
+  navigate('all');
+}
+
+init();
+</script>
+</body>
+</html>
