@@ -1,0 +1,8 @@
+dlsite.db
+dlsite.db-wal
+dlsite.db-shm
+*.exe
+*.dll
+*.so
+*.dylib
+dlsitexz
